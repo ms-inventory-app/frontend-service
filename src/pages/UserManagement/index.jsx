@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { authService } from '../../services/api';
 import Layout from '../../components/layout/Layout';
 import { PlusIcon, PencilIcon, TrashIcon, KeyIcon } from '@heroicons/react/24/outline';
 
@@ -13,16 +14,30 @@ const UserManagement = () => {
     return password;
   };
   
-  // Mock user data
-  const [users, setUsers] = useState([
-    { id: 1, name: 'John Doe', email: 'john@example.com', role: 'Admin', lastLogin: new Date() },
-    { id: 2, name: 'Jane Smith', email: 'jane@example.com', role: 'Sales', lastLogin: new Date(Date.now() - 86400000) },
-    { id: 3, name: 'Mike Johnson', email: 'mike@example.com', role: 'Inventory', lastLogin: new Date(Date.now() - 172800000) },
-    { id: 4, name: 'Sarah Williams', email: 'sarah@example.com', role: 'Sales', lastLogin: new Date(Date.now() - 259200000) },
-    { id: 5, name: 'David Brown', email: 'david@example.com', role: 'Inventory', lastLogin: new Date(Date.now() - 345600000) },
-    { id: 6, name: 'Emily Davis', email: 'emily@example.com', role: 'Admin', lastLogin: new Date(Date.now() - 432000000) },
-    { id: 7, name: 'Robert Wilson', email: 'robert@example.com', role: 'Sales', lastLogin: new Date(Date.now() - 518400000) },
-  ]);
+  // User data state
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  
+  // Fetch all users
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        setLoading(true);
+        const data = await authService.getAllUsers();
+        console.log('User data from API:', data);
+        setUsers(data);
+        setError('');
+      } catch (err) {
+        console.error('Failed to fetch users:', err);
+        setError('Failed to load users. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchUsers();
+  }, []);
 
   // Modal states
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -85,42 +100,72 @@ const UserManagement = () => {
   };
   
   // Add new user
-  const handleAddUser = (e) => {
+  const handleAddUser = async (e) => {
     e.preventDefault();
-    const newUser = {
-      id: users.length > 0 ? Math.max(...users.map(user => user.id)) + 1 : 1,
-      name: formData.name,
-      email: formData.email,
-      role: formData.role,
-      lastLogin: new Date()
-    };
-    setUsers([...users, newUser]);
-    closeModals();
+    try {
+      setError('');
+      const userData = {
+        name: formData.name,
+        email: formData.email,
+        password: formData.password,
+        role: formData.role
+      };
+      
+      await authService.register(userData);
+      
+      // Refresh the user list
+      const updatedUsers = await authService.getAllUsers();
+      setUsers(updatedUsers);
+      closeModals();
+    } catch (err) {
+      console.error('Failed to add user:', err);
+      setError(err.response?.data?.message || 'Failed to add user. Please try again.');
+    }
   };
   
   // Update existing user
-  const handleUpdateUser = (e) => {
+  const handleUpdateUser = async (e) => {
     e.preventDefault();
-    const updatedUsers = users.map(user => {
-      if (user.id === selectedUser.id) {
-        return {
-          ...user,
-          name: formData.name,
-          email: formData.email,
-          role: formData.role
-        };
+    try {
+      setError('');
+      const userData = {
+        userId: selectedUser._id,
+        name: formData.name,
+        email: formData.email,
+        role: formData.role
+      };
+      
+      // Only include password if it was provided
+      if (formData.password) {
+        userData.password = formData.password;
       }
-      return user;
-    });
-    setUsers(updatedUsers);
-    closeModals();
+      
+      await authService.updateUser(userData);
+      
+      // Refresh the user list
+      const updatedUsers = await authService.getAllUsers();
+      setUsers(updatedUsers);
+      closeModals();
+    } catch (err) {
+      console.error('Failed to update user:', err);
+      setError(err.response?.data?.message || 'Failed to update user. Please try again.');
+    }
   };
   
   // Delete user
-  const handleDeleteUser = () => {
-    const updatedUsers = users.filter(user => user.id !== selectedUser.id);
-    setUsers(updatedUsers);
-    closeModals();
+  const handleDeleteUser = async () => {
+    try {
+      setError('');
+      await authService.deleteUser(selectedUser._id);
+      
+      // Refresh the user list
+      const updatedUsers = await authService.getAllUsers();
+      setUsers(updatedUsers);
+      closeModals();
+    } catch (err) {
+      console.error('Failed to delete user:', err);
+      setError(err.response?.data?.message || 'Failed to delete user. Please try again.');
+    }
   };
   
   // Get role badge color
@@ -150,59 +195,77 @@ const UserManagement = () => {
         </button>
       </div>
       
+      {/* Display error message if any */}
+      {error && (
+        <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-md border border-red-200">
+          {error}
+        </div>
+      )}
+      
       {/* User List */}
       <div className="bg-white shadow overflow-hidden rounded-lg">
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
-                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {users.map((user, index) => (
-                <tr key={user.id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{index + 1}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <div className="flex-shrink-0 h-8 w-8">
-                        <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-semibold">
-                          {user.name.charAt(0)}
+          {loading ? (
+            <div className="flex justify-center items-center p-8">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+              <span className="ml-3 text-gray-600">Loading users...</span>
+            </div>
+          ) : users.length === 0 ? (
+            <div className="text-center p-8 text-gray-500">
+              No users found. Add a new user to get started.
+            </div>
+          ) : (
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {users.map((user, index) => (
+                  <tr key={user._id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{index + 1}</td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <div className="flex-shrink-0 h-8 w-8">
+                          <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-semibold">
+                            {user.name ? user.name.charAt(0) : '?'}
+                          </div>
+                        </div>
+                        <div className="ml-4">
+                          <div className="text-sm font-medium text-gray-900">{user.name}</div>
                         </div>
                       </div>
-                      <div className="ml-4">
-                        <div className="text-sm font-medium text-gray-900">{user.name}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{user.email}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getRoleBadgeColor(user.role)} py-1`}>
-                      {user.role}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <button
-                      onClick={() => openEditModal(user)}
-                      className="text-indigo-600 hover:text-indigo-900 mr-3"
-                    >
-                      <PencilIcon className="h-5 w-5 inline" />
-                    </button>
-                    <button
-                      onClick={() => openDeleteModal(user)}
-                      className="text-red-600 hover:text-red-900"
-                    >
-                      <TrashIcon className="h-5 w-5 inline" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{user.email}</td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getRoleBadgeColor(user.role)} py-1`}>
+                        {user.role}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      <button
+                        onClick={() => openEditModal(user)}
+                        className="text-indigo-600 hover:text-indigo-900 mr-3"
+                      >
+                        <PencilIcon className="h-5 w-5 inline" />
+                      </button>
+                      <button
+                        onClick={() => openDeleteModal(user)}
+                        className="text-red-600 hover:text-red-900"
+                      >
+                        <TrashIcon className="h-5 w-5 inline" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
       
