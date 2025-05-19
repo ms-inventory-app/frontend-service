@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
 import Navbar from '../../components/common/Navbar';
+import { authService } from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -9,44 +10,109 @@ const Login = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   
-  const { login } = useAuth();
+  // We need to use the login function from AuthContext, not setUser
+  const { login: authLogin } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
+  // Direct login function - no form submission
+  const handleLogin = async () => {
     // Simple validation
     if (!email || !password) {
       setError('Please fill in all fields');
       return;
     }
     
+    setError('');
+    setLoading(true);
+    
     try {
-      setError('');
-      setLoading(true);
+      // Use the authService login method which already handles console errors
+      const response = await authService.login({
+        email: email,
+        password: password
+      });
       
-      // Call the login function from AuthContext
-      const user = await login({ email, password });
-      
-      // Redirect based on user role
-      if (user.role === 'admin') {
-        navigate('/dashboard');
-      } else if (user.role === 'sales') {
-        navigate('/sales');
-      } else if (user.role === 'inventory') {
-        navigate('/inventory-dashboard');
-      } else {
-        navigate('/dashboard');
+      // Check if there's an error in the response
+      if (response.error) {
+        setLoading(false);
+        setError(response.error);
+        // Clear password field on invalid credentials
+        setPassword('');
+        return;
       }
-    } catch (err) {
-      setError('Failed to log in. Please check your credentials.');
-      console.error(err);
+      
+      // Check if response has the expected properties
+      if (!response.name || !response.role || !response.accesstoken) {
+        setLoading(false);
+        setError("Login response is missing required data. Please try again.");
+        return;
+      }
+
+      // Extract user data from response
+      const { name, role, accesstoken } = response;
+
+      const user = {
+        name,
+        email: email,
+        role,
+        accesstoken,
+      };
+      
+      // User object created successfully
+      
+      // Use the authLogin function from AuthContext to handle the user state
+      try {
+        // We'll use the authLogin function which will handle setting the user in context
+        await authLogin({ email, password });
+        
+        // Redirect based on user role
+        if (role === 'admin') {
+          navigate('/dashboard');
+        } else if (role === 'sales') {
+          navigate('/sales');
+        } else if (role === 'inventory') {
+          navigate('/inventory-dashboard');
+        } else {
+          navigate('/dashboard');
+        }
+      } catch {
+        // Fall back to manual localStorage if authLogin fails
+        // If authLogin fails, we'll fall back to manual localStorage update
+        localStorage.setItem("inventoryAppUser", JSON.stringify(user));
+        
+        // Redirect based on user role
+        if (role === 'admin') {
+          navigate('/dashboard');
+        } else if (role === 'sales') {
+          navigate('/sales');
+        } else if (role === 'inventory') {
+          navigate('/inventory-dashboard');
+        } else {
+          navigate('/dashboard');
+        }
+      }
+    } catch (error) {
+      // Provide a more specific error message if possible
+      let errorMessage = "An error occurred during login. Please try again.";
+      if (error && error.message) {
+        errorMessage = `Login error: ${error.message}`;
+      }
+      
+      setError(errorMessage);
+      // Clear password field on error
+      setPassword('');
     } finally {
       setLoading(false);
     }
   };
-  
 
+  // Handle key press for Enter key
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleLogin();
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -68,7 +134,7 @@ const Login = () => {
               </div>
             )}
             
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="space-y-6">
               <div>
                 <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
                   Email Address
@@ -78,9 +144,9 @@ const Login = () => {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  onKeyPress={handleKeyPress}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="you@example.com"
-                  required
                 />
               </div>
               
@@ -98,22 +164,23 @@ const Login = () => {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  onKeyPress={handleKeyPress}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="••••••••"
-                  required
                 />
               </div>
               
               <div>
                 <button
-                  type="submit"
+                  type="button" 
+                  onClick={handleLogin}
                   disabled={loading}
                   className="w-full px-4 py-2 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {loading ? 'Signing in...' : 'Sign In'}
                 </button>
               </div>
-            </form>
+            </div>
             
             <div className="mt-8">
               <div className="relative">

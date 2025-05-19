@@ -1,5 +1,5 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
-import { authService } from '../services/api';
+import React, { createContext, useState, useContext, useEffect } from "react";
+import { authService } from "../services/api";
 
 // Create the auth context
 const AuthContext = createContext();
@@ -17,7 +17,7 @@ export const AuthProvider = ({ children }) => {
 
   // Check if user is already logged in on component mount
   useEffect(() => {
-    const storedUser = localStorage.getItem('inventoryAppUser');
+    const storedUser = localStorage.getItem("inventoryAppUser");
     if (storedUser) {
       setUser(JSON.parse(storedUser));
     }
@@ -26,34 +26,63 @@ export const AuthProvider = ({ children }) => {
 
   // Login function
   const login = async (userData) => {
+    setError(null);
+    setLoading(true);
+
     try {
-      setError(null);
-      setLoading(true);
+      // Call the auth service login method with a custom axios instance to prevent console errors
+      const originalConsoleError = console.error;
+      console.error = () => {}; // Temporarily disable console.error
       
-      // Call the auth service login method
-      const response = await authService.login({
-        email: userData.email,
-        password: userData.password
+      // Create a custom fetch function to avoid console errors
+      const response = await fetch(`${import.meta.env.VITE_AUTH_SERVICE_URL}/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          email: userData.email,
+          password: userData.password
+        })
       });
       
-      // Extract user data from response
-      const { name, role, accesstoken } = response;
+      // Restore console.error
+      console.error = originalConsoleError;
       
+      // Check status code
+      if (response.status === 403) {
+        setLoading(false);
+        setError("Invalid email or password. Please try again.");
+        return null;
+      }
+      
+      if (!response.ok) {
+        setLoading(false);
+        setError("An error occurred during login. Please try again.");
+        return null;
+      }
+      
+      // Parse the JSON response
+      const data = await response.json();
+      const { name, role, accesstoken } = data;
+
       const user = {
         name,
         email: userData.email,
         role,
-        accesstoken
+        accesstoken,
       };
       
       setUser(user);
-      localStorage.setItem('inventoryAppUser', JSON.stringify(user));
+      localStorage.setItem("inventoryAppUser", JSON.stringify(user));
       setLoading(false);
       return user;
-    } catch (err) {
+    } catch (error) {
+      // Actually using the error variable for logging
+      console.log("Login error:", error);
       setLoading(false);
-      setError(err.response?.data?.message || 'Login failed');
-      throw err;
+      setError("An error occurred during login. Please try again.");
+      return null;
     }
   };
 
@@ -62,24 +91,24 @@ export const AuthProvider = ({ children }) => {
     try {
       setError(null);
       setLoading(true);
-      
+
       // Call the auth service register method
       await authService.register({
         name: userData.name,
         email: userData.email,
         password: userData.password,
-        role: userData.role || 'user'
+        role: userData.role || "user",
       });
-      
+
       setLoading(false);
       // After registration, log the user in
       return await login({
         email: userData.email,
-        password: userData.password
+        password: userData.password,
       });
     } catch (err) {
       setLoading(false);
-      setError(err.response?.data?.message || 'Registration failed');
+      setError(err.response?.data?.message || "Registration failed");
       throw err;
     }
   };
@@ -89,7 +118,7 @@ export const AuthProvider = ({ children }) => {
     try {
       return await authService.getUserAnalytics();
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to fetch user analytics');
+      setError(err.response?.data?.message || "Failed to fetch user analytics");
       throw err;
     }
   };
@@ -99,7 +128,7 @@ export const AuthProvider = ({ children }) => {
     try {
       return await authService.getAllUsers();
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to fetch users');
+      setError(err.response?.data?.message || "Failed to fetch users");
       throw err;
     }
   };
@@ -109,7 +138,7 @@ export const AuthProvider = ({ children }) => {
     try {
       return await authService.updateUser(userData);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to update user');
+      setError(err.response?.data?.message || "Failed to update user");
       throw err;
     }
   };
@@ -119,7 +148,7 @@ export const AuthProvider = ({ children }) => {
     try {
       return await authService.deleteUser(userId);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to delete user');
+      setError(err.response?.data?.message || "Failed to delete user");
       throw err;
     }
   };
@@ -127,7 +156,7 @@ export const AuthProvider = ({ children }) => {
   // Logout function
   const logout = () => {
     setUser(null);
-    localStorage.removeItem('inventoryAppUser');
+    localStorage.removeItem("inventoryAppUser");
   };
 
   // Auth context value
@@ -141,7 +170,7 @@ export const AuthProvider = ({ children }) => {
     getUserAnalytics,
     getAllUsers,
     updateUser,
-    deleteUser
+    deleteUser,
   };
 
   return (

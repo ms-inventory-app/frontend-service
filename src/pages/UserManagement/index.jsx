@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { authService } from '../../services/api';
 import Layout from '../../components/layout/Layout';
 import { PlusIcon, PencilIcon, TrashIcon, KeyIcon } from '@heroicons/react/24/outline';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 const UserManagement = () => {
   // Function to generate a random password
@@ -25,11 +27,9 @@ const UserManagement = () => {
       try {
         setLoading(true);
         const data = await authService.getAllUsers();
-        console.log('User data from API:', data);
         setUsers(data);
         setError('');
-      } catch (err) {
-        console.error('Failed to fetch users:', err);
+      } catch {
         setError('Failed to load users. Please try again.');
       } finally {
         setLoading(false);
@@ -108,17 +108,27 @@ const UserManagement = () => {
         name: formData.name,
         email: formData.email,
         password: formData.password,
-        role: formData.role
+        role: formData.role.toLowerCase() // Convert role to lowercase
       };
       
       await authService.register(userData);
+      
+      // Show success toast notification
+      toast.success(`User ${userData.name} added successfully!`, {
+        position: "top-right",
+        autoClose: 3000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true
+      });
       
       // Refresh the user list
       const updatedUsers = await authService.getAllUsers();
       setUsers(updatedUsers);
       closeModals();
     } catch (err) {
-      console.error('Failed to add user:', err);
+      // Error handled through setError
       setError(err.response?.data?.message || 'Failed to add user. Please try again.');
     }
   };
@@ -132,7 +142,7 @@ const UserManagement = () => {
         userId: selectedUser._id,
         name: formData.name,
         email: formData.email,
-        role: formData.role
+        role: formData.role.toLowerCase() // Convert role to lowercase
       };
       
       // Only include password if it was provided
@@ -147,7 +157,7 @@ const UserManagement = () => {
       setUsers(updatedUsers);
       closeModals();
     } catch (err) {
-      console.error('Failed to update user:', err);
+      // Error handled through setError
       setError(err.response?.data?.message || 'Failed to update user. Please try again.');
     }
   };
@@ -163,7 +173,7 @@ const UserManagement = () => {
       setUsers(updatedUsers);
       closeModals();
     } catch (err) {
-      console.error('Failed to delete user:', err);
+      // Error handled through setError
       setError(err.response?.data?.message || 'Failed to delete user. Please try again.');
     }
   };
@@ -183,6 +193,8 @@ const UserManagement = () => {
       title="User"
       description="Add, update, and delete system users"
     >
+      {/* Toast Container for notifications */}
+      <ToastContainer />
       {/* Page Header */}
       <div className="flex justify-between items-center mb-6">
         <div></div>
